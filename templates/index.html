@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Цифры в клетках</title>
+    <style>
+        table {
+            font-size: 40px;
+            border-collapse: collapse;
+        }
+
+        h4 {
+            margin-top: 10px
+        }
+
+        .block {
+            font-size: 24px;
+            float: left;
+            margin-right: 50px;
+        }
+
+        td {
+            font-size: 40px;
+            width: 50px;
+            height: 50px;
+            border: 1px solid black;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .selected {
+            background-color: lightblue;
+        }
+    </style>
+</head>
+<body>
+<div class='block'>
+    <table id="grid"></table>
+    <button id="clear-button">Очистить</button>
+    <br>
+    <label for="text-field">Название:</label><br>
+    <input type="text" id="text-field"><br>
+    <button id="save-button">Сохранить</button><br>
+    <label for="url-field">Адрес сервера:</label><br>
+    <input type="text" id="url-field"><br>
+    <button id="url-button">Сохранить</button><br>
+    <label for="inputSides">Ограничение поля зрения по горизонтали:</label><br>
+    <input type="range" id="inputSides" min="0" max="10" value="{{inputSides}}">
+    <span id='outputValueSides'>{{inputSides}}</span>0%<br>
+    <label for="inputTop">Ограничение по верху и низу:</label><br>
+    <input type="range" id="inputTop" min="0" max="10" value="{{inputTop}}">
+    <span id='outputValueTop'>{{inputTop}}</span>0%<br>
+    <form action="/start_detect">
+        <button>Начать сканирование пространства</button>
+    </form>
+</div>
+
+<div class='block'>
+    <h4>Список матриц:</h4>
+    <ul id="matrix-list"></ul>
+    <button id="load-button">Загрузить</button>
+    <button id="del-button">Удалить</button>
+</div>
+<div class='block'>
+    <label for="inputPower">Интенсивность вибрации:</label><br>
+    <input type="range" id="inputPower" min="0" max="10" value="{{inputPower}}">
+    <span id='outputValuePower'>{{inputPower}}</span>0%<br>
+    <label for="inputTime">время работы в сек:</label><br>
+    <input type="range" id="inputTime" min="0.1" max="10" value="{{inputTime}}" step="0.1">
+    <span id='outputValueOn'>{{inputTime}}</span><br>
+    <label for="inputPause">пауза в сек:</label><br>
+    <input type="range" id="inputPause" min="0.1" max="5" value="{{inputPause}}" step="0.1">
+    <span id='outputValuePause'>{{inputPause}}</span><br>
+    <label for="inputDopPause">Дополнительная пауза:</label><br>
+    <input type="range" id="inputDopPause" min="0.1" max="5" value="{{inputDopPause}}" step="0.1">
+    <span id='outputValueDopPause'>{{inputDopPause}}</span><br>
+    <label for="repeats">Повторения:</label><br>
+    <input type="range" id="repeats" min="1" max="10" value="{{repeats}}">
+    <span id='rangeValueRepeats'>{{repeats}}</span><br>
+    <label for="rotate">Поворот:</label><br>
+    <input type="range" id="rotate" min="0" step="90" max="270" value="0">
+    <span id='rangeValueRotate'>0</span><br>
+    <button id="stan_vibro">Постоянная</button>
+    <button id="s_vibro">Змейка</button>
+    <button id="off_mode">ВЫКЛ</button>
+    <br><br><br><br><br><br><br><br>
+    <form action="/test">
+        <button>К тестам</button>
+    </form>
+</div>
+<script>
+    const grid = document.getElementById('grid');
+    const saveButton = document.getElementById('save-button');
+    const urlButton = document.getElementById('url-button');
+    const clearButton = document.getElementById('clear-button');
+    const textField = document.getElementById('text-field');
+    const matrixList = document.getElementById('matrix-list');
+    const loadButton = document.getElementById('load-button');
+    const delButton = document.getElementById('del-button');
+    const inputPower = document.getElementById('inputPower');
+    const inputSides = document.getElementById('inputSides');
+    const inputTop = document.getElementById('inputTop');
+    let rangeValuePower = document.getElementById('outputValuePower');
+    let rangeValueSides = document.getElementById('outputValueSides');
+    let rangeValueTop = document.getElementById('outputValueTop');
+    const inputTime = document.getElementById('inputTime');
+    let rangeValueOn = document.getElementById('outputValueOn');
+    const inputPause = document.getElementById('inputPause');
+    let rangeValuePause = document.getElementById('outputValuePause');
+    const inputDopPause = document.getElementById('inputDopPause');
+    let rangeValueDopPause = document.getElementById('outputValueDopPause');
+    const repeats = document.getElementById('repeats');
+    let rangeValueRepeats = document.getElementById('rangeValueRepeats');
+    const rotate = document.getElementById('rotate');
+    let rangeValueRotate = document.getElementById('rangeValueRotate');
+    const stan_vibro = document.getElementById('stan_vibro');
+    const s_vibro = document.getElementById('s_vibro');
+    const off_mode = document.getElementById('off_mode');
+    let iterator = 1;
+    let selectedMatrix = null; // Переменная для хранения выбранной матрицы
+
+    get_name()
+    loadMatrix('')
+
+
+    function get_name() {
+        fetch(`/get_name`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                textField.value = data.name;
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    }
+
+    // Создание сетки 4x4
+    function createGrid() {
+        for (let i = 0; i < 4; i++) {
+            const row = grid.insertRow();
+            for (let j = 0; j < 4; j++) {
+                const cell = row.insertCell();
+                cell.addEventListener('click', function () {
+                    let str = cell.textContent
+                    if (!event.shiftKey && !event.altKey) {
+                        if (iterator <= 16 && str == "") {
+                            cell.textContent = iterator;
+                            iterator++;
+                        }
+                    }
+
+                    if (event.shiftKey) {
+                        if (iterator > 1 && (str == ((iterator - 1) + ",") || str == (iterator - 1))) {
+                            cell.textContent = '';
+                            iterator--;
+                        }
+                    }
+                    if (event.altKey) {
+                        if (cell.textContent != "" && str[str.length - 1] != ",") {
+                            cell.textContent = str + ","
+                        }
+                        if (str[str.length - 1] == ",") {
+                            cell.textContent = str.slice(0, -1)
+                        }
+                    }
+                    send_matrix()
+                });
+            }
+        }
+    }
+
+    function send_matrix() {
+        const data = [];
+        const cells = grid.querySelectorAll('td');
+        cells.forEach(cell => {
+            data.push(cell.textContent || 0);
+        });
+        fetch('/send_matrix', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({data: data})
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Ответ от сервера:", data);
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+
+    }
+
+    // Обработка нажатия кнопки "Сохранить"
+    saveButton.addEventListener('click', function () {
+        const text = textField.value;
+        if (text) {
+            // Отправка данных на сервер Python (с помощью AJAX)
+            fetch('/save_all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({text: text})
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Ошибка: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Ответ от сервера:", data);
+                })
+                .catch(error => {
+                    console.error("Ошибка:", error);
+                });
+        } else {
+            alert("Введите название");
+        }
+    });
+
+
+    urlButton.addEventListener('click', function () {
+        const text = textField.value;
+        if (text) {
+            // Отправка данных на сервер Python (с помощью AJAX)
+            fetch('/get_url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({text: text})
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Ошибка: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Ответ от сервера:", data);
+                })
+                .catch(error => {
+                    console.error("Ошибка:", error);
+                });
+        } else {
+            alert("Введите название");
+        }
+    });
+
+
+    // Обработка нажатия кнопки "Очистить"
+    clearButton.addEventListener('click', function () {
+        const cells = grid.querySelectorAll('td');
+        cells.forEach(cell => {
+            cell.textContent = '';
+        });
+        iterator = 1;
+    });
+
+    // Функция для загрузки матрицы по ее имени
+    function loadMatrix(matrixName) {
+        fetch(`/load_matrix?name=${matrixName}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                displayGrid(data.grid_data);
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    }
+
+    // Отображение матрицы на странице
+    function displayGrid(gridData) {
+        const cells = grid.querySelectorAll('td');
+        cells.forEach(cell => {
+            cell.textContent = '';
+        });
+
+        iterator = 0
+        i = 0;
+        cells.forEach(cell => {
+            if (gridData[i] != "0") {
+                cell.textContent = gridData[i];
+                if (Number(gridData[i]) > iterator) {
+                    iterator = Number(gridData[i]);
+                }
+            }
+            i += 1
+        });
+        iterator += 1
+    }
+
+    // Загрузка списка матриц
+    fetch('/load_matrix_list')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Добавление строк в список
+            data.matrix_names.forEach(matrixName => {
+                const listItem = document.createElement('li');
+                listItem.textContent = matrixName;
+                listItem.addEventListener('click', function () {
+                    // Снимаем выделение с предыдущего элемента
+                    if (selectedMatrix) {
+                        selectedMatrix.classList.remove('selected');
+                    }
+                    // Выделяем выбранный элемент
+                    this.classList.add('selected');
+                    selectedMatrix = this; // Сохраняем выбранный элемент
+                    selectedMatrixName = matrixName; // Сохраняем имя выбранной матрицы
+                });
+                matrixList.appendChild(listItem);
+            });
+        })
+        .catch(error => {
+            console.error("Ошибка:", error);
+        });
+
+    // Обработка нажатия кнопки "Загрузить"
+    loadButton.addEventListener('click', function () {
+        if (selectedMatrixName) {
+            loadMatrix(selectedMatrixName); // Загружаем выбранную матрицу
+            textField.value = selectedMatrixName
+        } else {
+            alert("Выберите матрицу для загрузки");
+        }
+    });
+
+    delButton.addEventListener('click', function () {
+        if (selectedMatrixName) {
+            if (confirm("Вы подтверждаете удаление: " + selectedMatrixName + "?")) {
+                alert(selectedMatrixName + " удалено");
+                fetch('/del', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({text: selectedMatrixName})
+                })
+            } else {
+                alert('Удаление отменено');
+            }
+
+        } else {
+            alert("Выберите матрицу для загрузки");
+        }
+    });
+
+    inputPower.addEventListener('input', function () {
+        rangeValuePower.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: "inputPower", value: this.value})
+        });
+    });
+
+    inputSides.addEventListener('input', function () {
+        rangeValueSides.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: "inputSides", value: this.value})
+        });
+    });
+
+    inputTop.addEventListener('input', function () {
+        rangeValueTop.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: "inputTop", value: this.value})
+        });
+    });
+
+    inputTime.addEventListener('input', function () {
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: 'inputTime', value: this.value})
+        });
+        rangeValueOn.innerHTML = this.value;
+    });
+
+    inputPause.addEventListener('input', function () {
+        rangeValuePause.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: 'inputPause', value: this.value})
+        });
+    });
+
+    inputDopPause.addEventListener('input', function () {
+        rangeValueDopPause.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: 'inputDopPause', value: this.value})
+        });
+    });
+
+    repeats.addEventListener('input', function () {
+        rangeValueRepeats.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: 'repeats', value: this.value})
+        });
+    });
+
+    rotate.addEventListener('input', function () {
+        rangeValueRotate.innerHTML = this.value;
+        fetch('/set_slider_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({slider: 'rotate', value: this.value})
+        });
+    });
+
+    stan_vibro.addEventListener('click', function () {
+        fetch('/button_clicked', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({button: 1})
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Ответ от сервера:", data);
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    });
+
+
+    s_vibro.addEventListener('click', function () {
+        fetch('/button_clicked', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({button: 2})
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Ответ от сервера:", data);
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    });
+    off_mode.addEventListener('click', function () {
+        fetch('/button_clicked', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({button: 0})
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Ответ от сервера:", data);
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    });
+
+    createGrid();
+</script>
+</body>
+</html>

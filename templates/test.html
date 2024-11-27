@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тесты</title>
+    <style>
+        table {
+            font-size: 40px;
+            border-collapse: collapse;
+        }
+        td {
+            font-size: 40px;
+            width: 50px;
+            height: 50px;
+            border: 1px solid black;
+            text-align: center;
+            cursor: pointer;
+        }
+        .block {
+            font-size: 24px;
+            float: left;
+            margin-right: 50px;
+        }
+
+        button {
+            height: 30px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+<div class="block" id="image-container1">
+</div>
+<div class="block" id="image-container2">
+</div>
+<div class="block" id="image-container3">
+</div>
+<div class="block" id="image-container4">
+</div>
+
+<div class="block">
+
+    <span id='output'>Правильных 0 из 0<br> 0.00%</span>
+    <br><br>
+    <button id="play">Воспроизвести</button>
+    <br><br><br><br><br><br>
+    <form action="/">
+        <button>К настройкам</button>
+    </form>
+
+</div>
+<div class="block">
+    <span id='history'>История:<br></span>
+</div>
+
+<script>
+    const play = document.getElementById('play');
+    const imageContainer1 = document.getElementById('image-container1');
+    const imageContainer2 = document.getElementById('image-container2');
+    const imageContainer3 = document.getElementById('image-container3');
+    const imageContainer4 = document.getElementById('image-container4');
+    const output = document.getElementById('output');
+    const history = document.getElementById('history');
+
+    let data_matr = []
+
+    let historyarr = []
+
+    let all_counter = new Array(12).fill(0)
+    let true_counter = new Array(12).fill(0)
+
+    play.addEventListener('click', function () {
+        fetch('/button_clicked', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({button: 2})
+        });
+    });
+
+    // Отображение матрицы на странице
+    function displayGrid(gridData, iter) {
+        const cells = eval(iter + "grid.querySelectorAll('td')");
+        cells.forEach(cell => {
+            if (gridData[i] != "0") {
+                cell.textContent = gridData[i];
+            }
+        });
+    }
+
+    function load_matix_list() {
+        fetch('/load_matrix_list')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Добавление строк в список
+                let iter = 0
+                data.matrix_names.forEach(matrixName => {
+                    createImageElement(matrixName, iter);
+                    iter += 1
+                });
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+
+
+    }
+
+    load_matix_list();
+
+    async function loadMatrix(matrixName) {
+        await fetch(`/load_matrix?name=${matrixName}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data.grid_data);
+                data_matr = data.grid_data;
+            })
+            .catch(error => {
+                console.error("Ошибка:", error);
+            });
+    }
+
+    // Функция для создания изображения и кнопки
+    async function createImageElement(imageSrc, i) {
+        const imageDiv = document.createElement('div');
+        await loadMatrix(imageSrc)
+        console.log(data_matr)
+        const grid = document.createElement('table')
+
+        for (let i = 0; i < 4; i++) {
+            const row = grid.insertRow();
+            for (let j = 0; j < 4; j++) {
+                const cell = row.insertCell();
+                cell.innerHTML = data_matr[i * 4 + j]
+            }
+        }
+
+
+        const button = document.createElement('button');
+        button.textContent = `${imageSrc}`;
+        button.addEventListener('click', () => {
+            // Отправка запроса на сервер
+            fetch('/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({imageName: imageSrc})
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json(); // Парсим ответ как JSON
+                })
+                .then(data => {
+                    all_counter[11] += 1;
+                    all_counter[data.ins] += 1;
+                    if (data.ins == data.ans) {
+                        true_counter[11] += 1;
+                        true_counter[data.ins] += 1;
+                    } else all_counter[data.ans] += 1;
+                    let temp = "per" + String(data.ins) + ".innerHTML = '" + String((true_counter[data.ins] / all_counter[data.ins] * 100).toFixed(2)) + "% из" + String(all_counter[data.ins]) + "'";
+                    eval(temp);
+                    temp = "per" + String(data.ans) + ".innerHTML = '" + String((true_counter[data.ans] / all_counter[data.ans] * 100).toFixed(2)) + "% из" + String(all_counter[data.ans]) + "'";
+                    eval(temp);
+                    output.innerHTML = "Правильных " + String(true_counter[11]) + " из " + String(all_counter[11]) + "<br>" + String((true_counter[11] / all_counter[11] * 100).toFixed(2)) + "%";
+                    historyarr.unshift(data.name)
+                    history.innerHTML = 'История:<br>';
+                    historyarr.forEach(name => {
+                        history.innerHTML += (name + "<br>")
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                });
+        });
+
+        const text = document.createElement("span")
+        text.id = "per" + String(i)
+        text.textContent = "0.00% из 0"
+        imageDiv.appendChild(grid);
+        imageDiv.appendChild(document.createElement("br"))
+        imageDiv.appendChild(button);
+        imageDiv.appendChild(text)
+        if (i % 4 == 0)
+            imageContainer1.appendChild(imageDiv);
+        else if (i % 4 == 1) imageContainer2.appendChild(imageDiv);
+        else if (i % 4 == 2) imageContainer3.appendChild(imageDiv);
+        else imageContainer4.appendChild(imageDiv);
+    }
+
+    // Пример данных изображений
+
+
+    // Создание элементов изображений
+
+</script>
+</body>
+</html>
